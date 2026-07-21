@@ -1,28 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>LSBUD Open Water Report</title>
 
 <link rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
-<link rel="stylesheet"
-      href="https
+<link relg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
 
-<style>
-
-*{
-    box-sizing:border-box;
-}
-
-body{
-    margin:0;
-    font-family:Arial,Helvetica,sans-serif;
-    background:#f5f5f5;
+<style>amily:Arial,sans-serif;
 }
 
 header{
@@ -31,79 +20,23 @@ header{
     padding:15px;
 }
 
-header h1{
-    margin:0;
-}
-
-header p{
-    margin:5px 0 0 0;
-}
-
-.container{
-    display:flex;
-    height:calc(100vh - 90px);
-}
-
-.sidebar{
-    width:360px;
-    background:white;
-    padding:20px;
-    overflow:auto;
-    border-right:1px solid #ddd;
-}
-
 #map{
-    width:100%;
-    height:800px;
+    height:70vh;
 }
 
-textarea{
-    width:100%;
-    height:120px;
-    padding:10px;
+.panel{
+    padding:15px;
 }
 
 button{
-    display:block;
-    width:100%;
-    margin-top:10px;
-    padding:12px;
-    border:none;
-    background:#002D5B;
-    color:white;
-    cursor:pointer;
-    border-radius:4px;
+    padding:10px;
+    margin-right:5px;
 }
 
-button:hover{
-    background:#004480;
-}
-
-.card{
+#results{
     margin-top:15px;
-    padding:15px;
-    background:#f8f8f8;
-    border-radius:4px;
-    border:1px solid #ddd;
-}
-
-.good{
-    border-left:5px solid green;
-}
-
-.warning{
-    border-left:5px solid orange;
-}
-
-.info{
-    font-size:12px;
-    color:#666;
-}
-
-.metric{
-    font-size:22px;
-    font-weight:bold;
-    color:#002D5B;
+    padding:10px;
+    border:1px solid #ccc;
 }
 
 </style>
@@ -113,64 +46,33 @@ button:hover{
 <body>
 
 <header>
-
 <h1>LSBUD Open Water Report</h1>
-
-<p>
-Draw a site boundary or paste WKT.
-</p>
-
 </header>
 
-<div class="container">
-
-<div class="sidebar">
-
-<h2>Site Search</h2>
-
-<textarea
-id="wktInput"
-placeholder="Paste WKT polygon here..."></textarea>
-
-<button onclick="loadWKT()">
-Load WKT
-</button>
-
-<button onclick="clearMap()">
-Clear Map
-</button>
+<div class="panel">
 
 <button onclick="analyseSite()">
 Analyse Site
 </button>
 
 <div id="results">
-
-<div class="card">
-
-Ready.
-
-</div>
-
+Draw a polygon.
 </div>
 
 </div>
 
 <div id="map"></div>
 
-</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-https://unpkg.com/leaflet@1.9.4/dist/leaflet.js
+<scriptaflet.draw.js"></script>
 
-https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js
-
-https://unpkg.com/@turf/turf@6/turf.min.js
+turf/turf@6/turf.min.js"></script>
 
 <script>
 
 const map =
-L.map("map")
-.setView(
+L.map("map").setView(
 [52.4862,-1.8904],
 11
 );
@@ -204,7 +106,6 @@ circlemarker:false
 edit:{
 featureGroup:drawnItems
 }
-
 });
 
 map.addControl(drawControl);
@@ -222,133 +123,22 @@ drawnItems.addLayer(
 currentLayer
 );
 
-showMessage(
-"Site drawn successfully."
-);
-
 }
 );
-
-function showMessage(message){
-
-document.getElementById(
-"results"
-).innerHTML =
-
-`
-<div class="card">
-${message}
-</div>
-`;
-
-}
-
-function clearMap(){
-
-drawnItems.clearLayers();
-
-currentLayer = null;
-
-document.getElementById(
-"wktInput"
-).value = "";
-
-showMessage("Map cleared.");
-
-}
-
-function loadWKT(){
-
-try{
-
-const wkt =
-document
-.getElementById(
-"wktInput"
-)
-.value
-.trim();
-
-if(!wkt){
-
-alert(
-"Please paste WKT."
-);
-
-return;
-
-}
-
-const coordsText =
-wkt.match(
-/\(\((.*)\)\)/
-)[1];
-
-const coords =
-coordsText
-.split(",")
-.map(c=>{
-
-const p =
-c.trim().split(/\s+/);
-
-return [
-
-parseFloat(
-p[1]
-),
-
-parseFloat(
-p[0]
-)
-
-];
-
-});
-
-drawnItems.clearLayers();
-
-currentLayer =
-L.polygon(coords);
-
-drawnItems.addLayer(
-currentLayer
-);
-
-map.fitBounds(
-currentLayer.getBounds()
-);
-
-showMessage(
-"WKT loaded."
-);
-
-}
-catch(err){
-
-alert(
-"Unable to parse WKT."
-);
-
-}
-
-}
 
 function analyseSite(){
 
 if(!currentLayer){
 
 alert(
-"Draw a site or load WKT first."
+"Draw a polygon first."
 );
 
 return;
-
 }
 
 const geojson =
-currentLayer
-.toGeoJSON();
+currentLayer.toGeoJSON();
 
 const areaSqm =
 turf.area(
@@ -372,65 +162,27 @@ document.getElementById(
 ).innerHTML =
 
 `
-<div class="card good">
-
-<h3>
-Site Analysis
-</h3>
+<h3>Site Analysis</h3>
 
 <p>
-Area (m²)
+Area:
+${areaSqm.toFixed(0)} m²
 </p>
-
-<div class="metric">
-${areaSqm.toFixed(0)}
-</div>
 
 <p>
-Area (ha)
+Area:
+${areaHa.toFixed(2)} ha
 </p>
-
-<div class="metric">
-${areaHa.toFixed(2)}
-</div>
 
 <p>
-Area (km²)
+Area:
+${areaKm2.toFixed(3)} km²
 </p>
-
-<div class="metric">
-${areaKm2.toFixed(3)}
-</div>
-
-<hr>
 
 <p>
-Indicative Report Price
-</p>
-
-<div class="metric">
+Suggested Report Price:
 £${price.toFixed(2)}
-</div>
-
-<p class="info">
-
-Stage 1 Complete.
-
-Next stage will add:
-
-• OpenStreetMap water search
-
-• Distance calculations
-
-• Risk categorisation
-
-• PDF reports
-
-• Stripe checkout
-
 </p>
-
-</div>
 `;
 
 }
