@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LSBUD Open Water Report - Phase 2</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+body{margin:0;font-family:Arial,sans-serif}#map{position:fixed;inset:0}#panel{position:absolute;top:15px;right:15px;width:340px;background:#fff;padding:15px;border-radius:10px;z-index:9999;box-shadow:0 2px 12px rgba(0,0,0,.2)}input,button{width:100%;padding:10px;margin:5px 0;box-sizing:border-box}button{background:#08243a;color:#fff;border:none;cursor:pointer}.metric{font-weight:bold}.risk-high{color:#c00}.risk-medium{color:#d97706}.risk-low{color:#2563eb}.risk-none{color:#15803d}
+</style>
+</head>
+<body>
+<div id="panel">
+<h3>LSBUD Open Water Report</h3>
+<input id="searchBox" placeholder="Search address or Easting Northing">
+<button id="findBtn">Find</button>
+<button id="drawPolygonBtn">Draw Polygon</button>
+<button id="finishBtn">Finish Drawing</button>
+<button id="clearBtn">Clear</button>
+<p>Selected Area: <span id="selectedArea">0.000</span> km²</p>
+<hr>
+<p>Water Features: <span id="waterCount">0</span></p>
+<p>Nearest Distance: <span id="nearestDistance">-</span></p>
+<p>Risk: <span id="riskResult">Unknown</span></p>
+<button id="analyseBtn">Analyse Open Water</button>
+</div>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js"></script>
+<script>
+proj4.defs('EPSG:27700','+proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +datum=OSGB36 +units=m +no_defs');
+const map=L.map('map').setView([52.48,-1.89],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+let drawMode=false,currentPoints=[],currentLayer=null,selectedGeometry=null,searchMarker=null,waterLayer=null;
+function updateArea(g){document.getElementById('selectedArea').textContent=(turf.area(g)/1000000).toFixed(3)}
+function clearAll(){if(currentLayer)map.removeLayer(currentLayer);if(waterLayer)map.removeLayer(waterLayer);currentLayer=null;waterLayer=null;selectedGeometry=null;currentPoints=[];document.getElementById('selectedArea').textContent='0.000';document.getElementById('waterCount').textContent='0';document.getElementById('nearestDistance').textContent='-';document.getElementById('riskResult').textContent='Unknown';}
+map.on('click',e=>{if(!drawMode)return;currentPoints.push(e.latlng);if(currentLayer)map.removeLayer(currentLayer);currentLayer=L.polygon(currentPoints,{color:'red'}).addTo(map);});
+document.getElementById('drawPolygonBtn').onclick=()=>{clearAll();drawMode=true};
+document.getElementById('finishBtn').onclick=()=>{if(currentPoints.length<3)return;drawMode=false;const ring=currentPoints.map(p=>[p.lng,p.lat]);ring.push(ring[0]);selectedGeometry=turf.polygon([ring]);updateArea(selectedGeometry)};
+document.getElementById('clearBtn').onclick=clearAll;
+function parseEN(v){const p=v.trim().split(/\s+/).map(Number);if(p.length<2||isNaN(p[0])||isNaN(p[1]))return null;const ll=proj4('EPSG:27700','EPSG:4326',[p[0],p[1]]);return {lat:ll[1],lon:ll[0]};}
+document.getElementById('findBtn').onclick=()=>{const q=document.getElementById('searchBox').value.trim();const en=parseEN(q);if(en){map.setView([en.lat,en.lon],15);if(searchMarker)map.removeLayer(searchMarker);searchMarker=L.marker([en.lat,en.lon]).addTo(map);return;}fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(q)).then(r=>r.json()).then(d=>{if(!d.length)return;const lat=+d[0].lat,lon=+d[0].lon;map.setView([lat,lon],15);if(searchMarker)map.removeLayer(searchMarker);searchMarker=L.marker([lat,lon]).addTo(map);});};
+async function analyseOpenWater(){if(!selectedGeometry){alert('Draw or load a site first');return;}const c=turf.centroid(selectedGeometry).geometry.coordinates;const q=`[out:json];(way(around:100,${c[1]},${c[0]})["natural"="water"];way(around:100,${c[1]},${c[0]})["waterway"];relation(around:100,${c[1]},${c[0]})["natural"="water"];);out tags center;`;const res=await fetch('https://overpass-api.de/api/interpreter?data='+encodeURIComponent(q));const data=await res.json();document.getElementById('waterCount').textContent=data.elements.length;let risk='NONE';if(data.elements.length>0) risk='LOW';document.getElementById('nearestDistance').textContent=data.elements.length?'Within 100m':'None';document.getElementById('riskResult').textContent=risk;}
+document.getElementById('analyseBtn').onclick=analyseOpenWater;
+</script>
+</body></html>
