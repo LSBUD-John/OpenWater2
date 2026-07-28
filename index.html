@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>LSBUD OpenWater - Phase 6</title>
+<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>
+<style>
+body{margin:0;font-family:Arial}#map{position:fixed;inset:0}#panel{position:absolute;right:15px;top:15px;width:430px;background:#fff;padding:15px;border-radius:12px;z-index:1000;max-height:92vh;overflow:auto;box-shadow:0 2px 12px rgba(0,0,0,.2)}
+.lsb,.d{color:#08243a;font-weight:700;font-size:38px}.u{color:#d92d27;font-weight:700;font-size:38px}.ow{color:#666;font-size:38px}.tag{font-size:12px;font-weight:700;color:#08243a}.strap{font-size:13px;color:#555;margin:6px 0 12px 0;padding-bottom:10px;border-bottom:2px solid #08243a}
+input,button{width:100%;padding:10px;margin:5px 0;box-sizing:border-box}button{background:#08243a;color:#fff;border:none}.feature{padding:6px 0;border-top:1px solid #eee}
+</style></head><body>
+<div id='panel'>
+<div><span class='lsb'>LSB</span><span class='u'>U</span><span class='d'>D</span><span class='ow'> OpenWater</span></div>
+<div class='tag'>OPEN WATER RISK & PLANNING HUB</div>
+<div class='strap'>Advanced water feature analysis that identifies nearby open water hazards and supports safer site planning.</div>
+<input id='searchBox' placeholder='Search address'><button id='findBtn'>Find</button><button id='drawBtn'>Draw Polygon</button><button id='finishBtn'>Finish Drawing</button><button id='clearBtn'>Clear</button>
+<p>Area: <span id='area'>0.000</span> km²</p><p>Price: £<span id='price'>0.00</span></p>
+<p><b>Nearest Feature:</b> <span id='nearest'>-</span></p><p><b>Distance:</b> <span id='dist'>-</span></p><p><b>Risk:</b> <span id='risk'>Unknown</span></p>
+<button id='analyseBtn'>Analyse Open Water</button><div id='features'></div></div>
+<div id='map'></div>
+<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script><script src='https://unpkg.com/@turf/turf@6/turf.min.js'></script>
+<script>
+const map=L.map('map').setView([52.48,-1.89],13);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+let drawing=false,pts=[],poly=null,siteGeo=null,waterLayer=L.featureGroup().addTo(map);
+map.on('click',e=>{if(!drawing)return;pts.push(e.latlng);if(poly)map.removeLayer(poly);poly=L.polygon(pts,{color:'red'}).addTo(map)});
+drawBtn.onclick=()=>{drawing=true;pts=[]};
+finishBtn.onclick=()=>{if(pts.length<3)return;drawing=false;const ring=pts.map(p=>[p.lng,p.lat]);ring.push(ring[0]);siteGeo=turf.polygon([ring]);const a=turf.area(siteGeo)/1e6;area.textContent=a.toFixed(3);price.textContent=Math.max(4.95,a*2).toFixed(2)};
+findBtn.onclick=()=>fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(searchBox.value)).then(r=>r.json()).then(d=>{if(d.length)map.setView([+d[0].lat,+d[0].lon],15)});
+function riskBand(m){return m<=25?'HIGH':m<=50?'MEDIUM':m<=100?'LOW':'NONE';}
+function featureDistance(site,lon,lat){const c=turf.centroid(site).geometry.coordinates;return Math.round(turf.distance(turf.point(c),turf.point([lon,lat]),{units:'kilometers'})*1000);}
+analyseBtn.onclick=async()=>{if(!siteGeo)return alert('Draw site first');features.innerHTML='Searching...';waterLayer.clearLayers();try{const b=turf.bbox(siteGeo);const q=`[out:json][timeout:20];(way(${b[1]-0.002},${b[0]-0.002},${b[3]+0.002},${b[2]+0.002})[waterway];way(${b[1]-0.002},${b[0]-0.002},${b[3]+0.002},${b[2]+0.002})[natural=water];);out tags center;`;const r=await fetch('https://overpass-api.de/api/interpreter?data='+encodeURIComponent(q));const j=JSON.parse(await r.text());let rows=j.elements.map(e=>{if(!e.center)return null;return {name:e.tags?.name||'Unnamed water feature',type:e.tags?.waterway||e.tags?.water||'water',distance:featureDistance(siteGeo,e.center.lon,e.center.lat),lat:e.center.lat,lon:e.center.lon};}).filter(Boolean).sort((a,b)=>a.distance-b.distance);rows.forEach(f=>L.circleMarker([f.lat,f.lon],{radius:5,color:'blue'}).addTo(waterLayer));if(rows.length){nearest.textContent=rows[0].name;dist.textContent=rows[0].distance+'m';risk.textContent=riskBand(rows[0].distance);}features.innerHTML=rows.map(f=>`<div class='feature'><b>${f.name}</b><br>Type: ${f.type}<br>Distance: ${f.distance}m</div>`).join('');}catch(e){features.innerHTML='Water service unavailable';console.log(e);}};
+</script></body></html>
