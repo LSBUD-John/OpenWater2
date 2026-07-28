@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>LSBUD Open Water Report - Phase 4</title>
+<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>
+<style>
+body{margin:0;font-family:Arial}#map{position:fixed;inset:0}#panel{position:absolute;right:15px;top:15px;width:380px;background:#fff;padding:15px;border-radius:10px;z-index:1000;box-shadow:0 2px 12px rgba(0,0,0,.2);max-height:90vh;overflow:auto}input,button{width:100%;padding:10px;margin:5px 0;box-sizing:border-box}button{background:#08243a;color:#fff;border:none}#featureList{font-size:13px;border-top:1px solid #ddd;padding-top:10px}.feature{padding:6px 0;border-bottom:1px solid #eee}
+</style>
+</head>
+<body>
+<div id='panel'>
+<h2>LSBUD Open Water Report</h2>
+<input id='searchBox' placeholder='Search address'>
+<button id='findBtn'>Find</button>
+<button id='drawBtn'>Draw Polygon</button>
+<button id='finishBtn'>Finish Drawing</button>
+<button id='clearBtn'>Clear</button>
+<p>Area: <span id='area'>0.000</span> km²</p>
+<p>Price: £<span id='price'>0.00</span></p>
+<hr>
+<p>Nearest Feature: <span id='nearestFeature'>-</span></p>
+<p>Distance: <span id='nearestDistance'>-</span></p>
+<p>Risk: <span id='risk'>Unknown</span></p>
+<button id='analyseBtn'>Analyse Open Water</button>
+<div id='featureList'></div>
+</div>
+<div id='map'></div>
+<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>
+<script src='https://unpkg.com/@turf/turf@6/turf.min.js'></script>
+<script>
+const map=L.map('map').setView([52.48,-1.89],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(map);
+let drawing=false,pts=[],poly=null,geo=null,marker=null,waterGroup=L.featureGroup().addTo(map);
+map.on('click',e=>{if(!drawing)return;pts.push(e.latlng);if(poly)map.removeLayer(poly);poly=L.polygon(pts,{color:'red'}).addTo(map)});
+drawBtn.onclick=()=>{drawing=true;pts=[];if(poly)map.removeLayer(poly)};
+finishBtn.onclick=()=>{if(pts.length<3)return;drawing=false;const ring=pts.map(p=>[p.lng,p.lat]);ring.push(ring[0]);geo=turf.polygon([ring]);let a=turf.area(geo)/1e6;area.textContent=a.toFixed(3);price.textContent=Math.max(4.95,a*2).toFixed(2)};
+clearBtn.onclick=()=>{pts=[];geo=null;if(poly)map.removeLayer(poly);waterGroup.clearLayers();featureList.innerHTML='';nearestFeature.textContent='-';nearestDistance.textContent='-';risk.textContent='Unknown';};
+findBtn.onclick=()=>{fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(searchBox.value)).then(r=>r.json()).then(d=>{if(!d.length)return;let lat=+d[0].lat,lon=+d[0].lon;map.setView([lat,lon],15);if(marker)map.removeLayer(marker);marker=L.marker([lat,lon]).addTo(map);});};
+function riskFromDistance(d){if(d<=25)return 'HIGH';if(d<=50)return 'MEDIUM';if(d<=100)return 'LOW';return 'NONE';}
+analyseBtn.onclick=async()=>{
+if(!geo){alert('Draw a site first');return;}
+waterGroup.clearLayers();
+featureList.innerHTML='Searching...';
+try{
+const b=turf.bbox(geo);const q=`[out:json][timeout:20];(way(${b[1]},${b[0]},${b[3]},${b[2]})["natural"="water"];way(${b[1]},${b[0]},${b[3]},${b[2]})["waterway"];relation(${b[1]},${b[0]},${b[3]},${b[2]})["natural"="water"];);out tags center;`;
+const r=await fetch('https://overpass-api.de/api/interpreter?data='+encodeURIComponent(q));
+const txt=await r.text();
+if(!r.ok||txt.startsWith('<?xml')) throw new Error('Overpass busy');
+const data=JSON.parse(txt);
+if(!data.elements.length){featureList.innerHTML='No water features found.';return;}
+const centroid=turf.centroid(geo).geometry.coordinates;
+let results=data.elements.map(e=>{let lat=e.center?.lat,lon=e.center?.lon;if(lat&&lon){let d=turf.distance(turf.point(centroid),turf.point([lon,lat]),{units:'kilometers'})*1000;return {name:e.tags?.name||'Unnamed water feature',type:e.tags?.waterway||e.tags?.water||'water',distance:Math.round(d),lat,lon};}}).filter(Boolean).sort((a,b)=>a.distance-b.distance);
+results.forEach(f=>L.circleMarker([f.lat,f.lon],{radius:6,color:'blue'}).addTo(waterGroup));
+nearestFeature.textContent=results[0].name;
+nearestDistance.textContent=results[0].distance+' m';
+risk.textContent=riskFromDistance(results[0].distance);
+featureList.innerHTML=results.slice(0,10).map(f=>`<div class='feature'><b>${f.name}</b><br>Type: ${f.type}<br>Distance: ${f.distance}m</div>`).join('');
+}catch(err){featureList.innerHTML='Water service unavailable. Try again.';console.log(err);}
+};
+const wkt=new URLSearchParams(location.search).get('wkt');
+if(wkt){try{const inner=decodeURIComponent(wkt).replace(/^POLYGON\s*\(\(/i,'').replace(/\)\)$/,'');const p=inner.split(',').map(x=>{let a=x.trim().split(/\s+/);return [parseFloat(a[1]),parseFloat(a[0])]});poly=L.polygon(p,{color:'red'}).addTo(map);map.fitBounds(poly.getBounds());const ring=p.map(x=>[x[1],x[0]]);ring.push(ring[0]);geo=turf.polygon([ring]);}catch(e){}}
+</script>
+</body></html>
