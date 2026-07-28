@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>LSBUD OpenWater</title>
+<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>
+<style>
+body{margin:0;font-family:Arial}#map{position:fixed;inset:0}#panel{position:absolute;right:15px;top:15px;width:420px;background:#fff;padding:15px;z-index:1000;border-radius:12px;max-height:92vh;overflow:auto;box-shadow:0 2px 12px rgba(0,0,0,.2)}
+#brand{border-bottom:2px solid #08243a;padding-bottom:10px;margin-bottom:10px}.ls{color:#08243a;font-weight:700;font-size:38px}.bud{color:#d92d27;font-weight:700;font-size:38px}.prod{color:#555;font-size:38px}.tag{font-size:12px;font-weight:700;color:#08243a}.strap{font-size:13px;color:#555;margin-top:6px}input,button{width:100%;padding:10px;margin:5px 0;box-sizing:border-box}button{background:#08243a;color:#fff;border:none}.feature{border-top:1px solid #eee;padding:6px 0}
+</style></head><body>
+<div id='panel'>
+<div id='brand'><span class='ls'>LS</span><span class='bud'>BUD</span><span class='prod'>OpenWater</span><div class='tag'>OPEN WATER RISK & PLANNING HUB</div><div class='strap'>Advanced water feature analysis that identifies nearby open water hazards and supports safer site planning.</div></div>
+<input id='searchBox' placeholder='Search address'><button id='findBtn'>Find</button><button id='drawBtn'>Draw Polygon</button><button id='finishBtn'>Finish Drawing</button><button id='clearBtn'>Clear</button>
+<p>Area: <span id='area'>0.000</span> km²</p><p>Price: £<span id='price'>0.00</span></p><p><b>Nearest Feature:</b> <span id='nearest'>-</span></p><p><b>Distance:</b> <span id='dist'>-</span></p><p><b>Risk:</b> <span id='risk'>Unknown</span></p>
+<button id='analyseBtn'>Analyse Open Water</button><div id='features'></div></div>
+<div id='map'></div>
+<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script><script src='https://unpkg.com/@turf/turf@6/turf.min.js'></script>
+<script>
+const map=L.map('map').setView([52.48,-1.89],13);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+let draw=false,pts=[],poly=null,geo=null,marker=null,water=L.featureGroup().addTo(map);
+map.on('click',e=>{if(!draw)return;pts.push(e.latlng);if(poly)map.removeLayer(poly);poly=L.polygon(pts,{color:'red'}).addTo(map);});
+drawBtn.onclick=()=>{draw=true;pts=[]};finishBtn.onclick=()=>{if(pts.length<3)return;draw=false;let r=pts.map(p=>[p.lng,p.lat]);r.push(r[0]);geo=turf.polygon([r]);let a=turf.area(geo)/1e6;area.textContent=a.toFixed(3);price.textContent=Math.max(4.95,a*2).toFixed(2)};
+clearBtn.onclick=()=>{if(poly)map.removeLayer(poly);water.clearLayers();features.innerHTML='';};
+findBtn.onclick=()=>fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(searchBox.value)).then(r=>r.json()).then(d=>{if(!d.length)return;map.setView([+d[0].lat,+d[0].lon],15);});
+function riskBand(m){return m<=25?'HIGH':m<=50?'MEDIUM':m<=100?'LOW':'NONE';}
+analyseBtn.onclick=async()=>{if(!geo)return alert('Draw site first');features.innerHTML='Searching...';water.clearLayers();try{const b=turf.bbox(geo);const q=`[out:json][timeout:20];(way(${b[1]},${b[0]},${b[3]},${b[2]})[natural=water];way(${b[1]},${b[0]},${b[3]},${b[2]})[waterway];);out tags center;`;const r=await fetch('https://overpass-api.de/api/interpreter?data='+encodeURIComponent(q));const t=await r.text();const j=JSON.parse(t);let c=turf.centroid(geo).geometry.coordinates;let rows=j.elements.map(e=>{if(!e.center)return null;let d=Math.round(turf.distance(turf.point(c),turf.point([e.center.lon,e.center.lat]),{units:'kilometers'})*1000);return {n:e.tags?.name||'Unnamed water feature',t:e.tags?.waterway||e.tags?.water||'water',d,lat:e.center.lat,lon:e.center.lon};}).filter(Boolean).sort((a,b)=>a.d-b.d);rows.forEach(f=>L.circleMarker([f.lat,f.lon],{radius:5,color:'blue'}).addTo(water));if(rows.length){nearest.textContent=rows[0].n;dist.textContent=rows[0].d+'m';risk.textContent=riskBand(rows[0].d);}features.innerHTML=rows.map(f=>`<div class='feature'><b>${f.n}</b><br>Type: ${f.t}<br>Distance: ${f.d}m</div>`).join('');}catch(e){features.innerHTML='Water service unavailable';}};
+</script></body></html>
