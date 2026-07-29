@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LSBUD OpenWater 2.0 MVP</title>
+<title>LSBUD OpenWater 2.1 MVP</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
 body{margin:0;font-family:Arial,sans-serif}#map{position:fixed;inset:0}#panel{position:absolute;right:15px;top:15px;width:420px;background:#fff;z-index:1000;padding:15px;border-radius:12px;max-height:92vh;overflow:auto;box-shadow:0 2px 10px rgba(0,0,0,.25)}
@@ -34,40 +34,25 @@ button,input,select{width:100%;padding:10px;margin:5px 0;box-sizing:border-box}
 const map=L.map('map').setView([52.48,-1.89],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 let waterData=null,waterLayer=null,bufferLayer=null,matchLayer=null,siteGeo=null,sitePoly=null,drawing=false,pts=[];
-async function loadWater(){try{const r=await fetch('./SurfaceWater_bham_clip.geojson');waterData=await r.json();waterLayer=L.geoJSON(waterData,{style:{color:'#0066cc',opacity:0,fillOpacity:0}}).addTo(map);status.textContent='Surface water dataset loaded';}catch(e){status.textContent='Failed to load SurfaceWater_bham_clip.geojson';console.error(e);}}
+async function loadWater(){try{const r=await fetch('./SurfaceWater_bham_clip.geojson');waterData=await r.json();waterLayer=L.geoJSON(waterData,{style:{opacity:0,fillOpacity:0}});status.textContent='Surface water dataset loaded';}catch(e){status.textContent='Failed to load SurfaceWater_bham_clip.geojson';console.error(e);}}
 loadWater();
 drawBtn.onclick=()=>{drawing=true;pts=[];status.textContent='Polygon mode active';if(sitePoly)map.removeLayer(sitePoly)};
 map.on('click',e=>{if(!drawing)return;pts.push(e.latlng);if(sitePoly)map.removeLayer(sitePoly);sitePoly=L.polygon(pts,{color:'red'}).addTo(map);});
 finishBtn.onclick=()=>{if(pts.length<3)return alert('Draw at least 3 points');drawing=false;const ring=pts.map(p=>[p.lng,p.lat]);ring.push(ring[0]);siteGeo=turf.polygon([ring]);area.textContent=(turf.area(siteGeo)/1000000).toFixed(3);status.textContent='Polygon completed';};
-function drawBuffer(g){if(bufferLayer)map.removeLayer(bufferLayer);bufferLayer=L.geoJSON(g,{style:{color:'#ff8c00',weight:2,fillOpacity:.08}}).addTo(map);} 
-function drawMatches(f){if(matchLayer)map.removeLayer(matchLayer);matchLayer=L.geoJSON(f,{style:{color:'#00aa44',weight:2,fillOpacity:.7}}).addTo(map);} 
-function getRisk(count,b){
-    if(count===0)return 'NONE';
-    if(b===0||b===10)return 'HIGH';
-    if(b===25)return 'MEDIUM';
-    return 'LOW';
-}
-
+function drawBuffer(g){
 analyseBtn.onclick = () => {
 
-    if(!siteGeo){
-        alert(
-            "Draw a site first"
-        );
+    if (!siteGeo) {
+        alert("Draw a site first");
         return;
     }
-
-    const thresholds = [
-        0,
-        10,
-        25,
-        50
-    ];
 
     let detectedThreshold = null;
     let detectedCount = 0;
 
-    for(const distance of thresholds){
+    const thresholds = [0, 10, 25, 50];
+
+    for (const distance of thresholds) {
 
         const testPolygon =
             distance === 0
@@ -75,39 +60,27 @@ analyseBtn.onclick = () => {
                 : turf.buffer(
                     siteGeo,
                     distance,
-                    {
-                        units:"meters"
-                    }
+                    { units: "meters" }
                 );
 
-        const hits =
-            waterData.features.filter(
-                feature => {
+        const hits = waterData.features.filter(feature => {
 
-                    try{
+            try {
+                return turf.booleanIntersects(
+                    testPolygon,
+                    feature
+                );
+            }
+            catch {
+                return false;
+            }
 
-                        return turf.booleanIntersects(
-                            testPolygon,
-                            feature
-                        );
+        });
 
-                    }
-                    catch{
+        if (hits.length > 0) {
 
-                        return false;
-
-                    }
-
-                }
-            );
-
-        if(hits.length > 0){
-
-            detectedThreshold =
-                distance;
-
-            detectedCount =
-                hits.length;
+            detectedThreshold = distance;
+            detectedCount = hits.length;
 
             break;
 
@@ -115,18 +88,18 @@ analyseBtn.onclick = () => {
 
     }
 
-    featureCount.textContent =
-        detectedCount;
+    featureCount.textContent = detectedCount;
 
-    if(
-        detectedThreshold === null
-    ){
+    if (detectedThreshold === null) {
 
         threshold.textContent =
             "None within 50m";
 
         risk.textContent =
             "NONE";
+
+        status.textContent =
+            "Analysis complete";
 
         return;
 
@@ -135,28 +108,46 @@ analyseBtn.onclick = () => {
     threshold.textContent =
         detectedThreshold + "m";
 
-    if(
-        detectedThreshold <= 10
-    ){
+    if (detectedThreshold <= 10) {
 
-        risk.textContent =
-            "HIGH";
+        risk.textContent = "HIGH";
 
     }
-    else if(
-        detectedThreshold <= 25
-    ){
+    else if (detectedThreshold <= 25) {
 
-        risk.textContent =
-            "MEDIUM";
+        risk.textContent = "MEDIUM";
 
     }
-    else{
+    else {
 
-        risk.textContent =
-            "LOW";
+        risk.textContent = "LOW";
 
     }
+
+    status.textContent =
+        "Analysis complete";
+
+};
+
+clearBtn.onclick = () => {
+
+    pts = [];
+    drawing = false;
+    siteGeo = null;
+
+    if (sitePoly) {
+        map.removeLayer(sitePoly);
+    }
+
+    area.textContent = "0.000";
+
+    threshold.textContent = "NONE";
+
+    featureCount.textContent = "0";
+
+    risk.textContent = "NONE";
+
+    status.textContent = "Ready";
 
 };
 clearBtn.onclick=()=>{pts=[];drawing=false;siteGeo=null;if(sitePoly)map.removeLayer(sitePoly);if(bufferLayer)map.removeLayer(bufferLayer);if(matchLayer)map.removeLayer(matchLayer);area.textContent='0.000';featureCount.textContent='0';risk.textContent='NONE';status.textContent='Ready';};
