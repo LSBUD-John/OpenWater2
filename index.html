@@ -33,13 +33,12 @@ button,input,select{width:100%;padding:10px;margin:5px 0;box-sizing:border-box}
 <script>
 const map=L.map('map').setView([52.48,-1.89],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
-let waterData=null,waterLayer=null,bufferLayer=null,matchLayer=null,siteGeo=null,sitePoly=null,drawing=false,pts=[];
+let waterData=null,sitePoly=null,drawing=false,pts=[];
 async function loadWater(){try{const r=await fetch('./SurfaceWater_bham_clip.geojson');waterData=await r.json();waterLayer=L.geoJSON(waterData,{style:{opacity:0,fillOpacity:0}});status.textContent='Surface water dataset loaded';}catch(e){status.textContent='Failed to load SurfaceWater_bham_clip.geojson';console.error(e);}}
 loadWater();
 drawBtn.onclick=()=>{drawing=true;pts=[];status.textContent='Polygon mode active';if(sitePoly)map.removeLayer(sitePoly)};
 map.on('click',e=>{if(!drawing)return;pts.push(e.latlng);if(sitePoly)map.removeLayer(sitePoly);sitePoly=L.polygon(pts,{color:'red'}).addTo(map);});
 finishBtn.onclick=()=>{if(pts.length<3)return alert('Draw at least 3 points');drawing=false;const ring=pts.map(p=>[p.lng,p.lat]);ring.push(ring[0]);siteGeo=turf.polygon([ring]);area.textContent=(turf.area(siteGeo)/1000000).toFixed(3);status.textContent='Polygon completed';};
-function drawBuffer(g){
 analyseBtn.onclick = () => {
 
     if (!siteGeo) {
@@ -84,7 +83,8 @@ analyseBtn.onclick = () => {
 
             break;
 
-     
+        }
+            
     }
 
     featureCount.textContent = detectedCount;
@@ -149,6 +149,6 @@ clearBtn.onclick = () => {
     status.textContent = "Ready";
 
 };
-clearBtn.onclick=()=>{pts=[];drawing=false;siteGeo=null;if(sitePoly)map.removeLayer(sitePoly);if(bufferLayer)map.removeLayer(bufferLayer);if(matchLayer)map.removeLayer(matchLayer);area.textContent='0.000';featureCount.textContent='0';risk.textContent='NONE';status.textContent='Ready';};
+
 </script>
 </body></html>
