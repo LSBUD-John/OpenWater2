@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LSBUD OpenWater 2.0 MVP</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+body{margin:0;font-family:Arial,sans-serif}#map{position:fixed;inset:0}#panel{position:absolute;right:15px;top:15px;width:420px;background:#fff;z-index:1000;padding:15px;border-radius:12px;max-height:92vh;overflow:auto;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.lsb,.d{color:#08243a;font-size:34px;font-weight:700}.u{color:#d92d27;font-size:34px;font-weight:700}.ow{color:#666;font-size:34px}
+button,input,select{width:100%;padding:10px;margin:5px 0;box-sizing:border-box}
+.btn-primary{background:#08243a;color:#fff;border:none}.btn-secondary{background:#6b7280;color:#fff;border:none}.btn-danger{background:#a92f38;color:#fff;border:none}
+#status{font-weight:bold;color:#08243a;padding:8px 0}.metric{margin:8px 0}
+</style>
+</head>
+<body>
+<div id="panel">
+<div><span class="lsb">LSB</span><span class="u">U</span><span class="d">D</span><span class="ow"> OpenWater</span></div>
+<p><b>OPEN WATER RISK & PLANNING HUB</b></p>
+<button id="drawBtn" class="btn-primary">Draw Polygon</button>
+<button id="finishBtn" class="btn-secondary">Finish Drawing</button>
+<button id="clearBtn" class="btn-danger">Clear</button>
+<div id="status">Loading water dataset...</div>
+<label>Assessment Buffer</label>
+<select id="bufferDistance">
+<option value="0">Site Only</option>
+<option value="10">Site +10m</option>
+<option value="25" selected>Site +25m</option>
+<option value="50">Site +50m</option>
+</select>
+<div class="metric">Area: <span id="area">0.000</span> km²</div>
+<div class="metric">Buffer: <span id="bufferValue">25m</span></div>
+<div class="metric">Intersecting Water Features: <span id="featureCount">0</span></div>
+<div class="metric">Risk: <span id="risk">NONE</span></div>
+<button id="analyseBtn" class="btn-primary">Analyse Open Water</button>
+</div>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<script>
+const map=L.map('map').setView([52.48,-1.89],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+let waterData=null,waterLayer=null,bufferLayer=null,matchLayer=null,siteGeo=null,sitePoly=null,drawing=false,pts=[];
+async function loadWater(){try{const r=await fetch('./SurfaceWater_bham_clip.geojson');waterData=await r.json();waterLayer=L.geoJSON(waterData,{style:{color:'#0066cc',weight:1,fillOpacity:.35}}).addTo(map);status.textContent='Surface water dataset loaded';}catch(e){status.textContent='Failed to load SurfaceWater_bham_clip.geojson';console.error(e);}}
+loadWater();
+drawBtn.onclick=()=>{drawing=true;pts=[];status.textContent='Polygon mode active';if(sitePoly)map.removeLayer(sitePoly)};
+map.on('click',e=>{if(!drawing)return;pts.push(e.latlng);if(sitePoly)map.removeLayer(sitePoly);sitePoly=L.polygon(pts,{color:'red'}).addTo(map);});
+finishBtn.onclick=()=>{if(pts.length<3)return alert('Draw at least 3 points');drawing=false;const ring=pts.map(p=>[p.lng,p.lat]);ring.push(ring[0]);siteGeo=turf.polygon([ring]);area.textContent=(turf.area(siteGeo)/1000000).toFixed(3);status.textContent='Polygon completed';};
+function drawBuffer(g){if(bufferLayer)map.removeLayer(bufferLayer);bufferLayer=L.geoJSON(g,{style:{color:'#ff8c00',weight:2,fillOpacity:.08}}).addTo(map);} 
+function drawMatches(f){if(matchLayer)map.removeLayer(matchLayer);matchLayer=L.geoJSON(f,{style:{color:'#00aa44',weight:2,fillOpacity:.7}}).addTo(map);} 
+function getRisk(count,b){if(count===0)return 'NONE';if(b===0||b===10)return 'HIGH';if(b===25)return 'MEDIUM';return 'LOW';}
+analyseBtn.onclick=()=>{if(!siteGeo)return alert('Draw a site first');if(!waterData)return alert('Dataset not loaded');const b=parseInt(bufferDistance.value);bufferValue.textContent=b+'m';const buffered=b===0?siteGeo:turf.buffer(siteGeo,b,{units:'meters'});drawBuffer(buffered);const hits=waterData.features.filter(f=>{try{return turf.booleanIntersects(buffered,f);}catch{return false;}});featureCount.textContent=hits.length;risk.textContent=getRisk(hits.length,b);drawMatches(hits);status.textContent='Analysis complete';};
+clearBtn.onclick=()=>{pts=[];drawing=false;siteGeo=null;if(sitePoly)map.removeLayer(sitePoly);if(bufferLayer)map.removeLayer(bufferLayer);if(matchLayer)map.removeLayer(matchLayer);area.textContent='0.000';featureCount.textContent='0';risk.textContent='NONE';status.textContent='Ready';};
+</script>
+</body></html>
