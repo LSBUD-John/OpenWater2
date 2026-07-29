@@ -41,8 +41,14 @@ map.on('click',e=>{if(!drawing)return;pts.push(e.latlng);if(sitePoly)map.removeL
 finishBtn.onclick=()=>{if(pts.length<3)return alert('Draw at least 3 points');drawing=false;const ring=pts.map(p=>[p.lng,p.lat]);ring.push(ring[0]);siteGeo=turf.polygon([ring]);area.textContent=(turf.area(siteGeo)/1000000).toFixed(3);status.textContent='Polygon completed';};
 function drawBuffer(g){if(bufferLayer)map.removeLayer(bufferLayer);bufferLayer=L.geoJSON(g,{style:{color:'#ff8c00',weight:2,fillOpacity:.08}}).addTo(map);} 
 function drawMatches(f){if(matchLayer)map.removeLayer(matchLayer);matchLayer=L.geoJSON(f,{style:{color:'#00aa44',weight:2,fillOpacity:.7}}).addTo(map);} 
-function getRisk(count,b){if(count===0)return 'NONE';if(b===0||b===10)return 'HIGH';if(b===25)return 'MEDIUM';return 'LOW';}
-analyseBtn.onclick=()=>{analyseBtn.onclick = () => {
+function getRisk(count,b){
+    if(count===0)return 'NONE';
+    if(b===0||b===10)return 'HIGH';
+    if(b===25)return 'MEDIUM';
+    return 'LOW';
+}
+
+analyseBtn.onclick = () => {
 
     if(!siteGeo){
         alert(
