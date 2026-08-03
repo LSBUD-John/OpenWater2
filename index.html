@@ -22,8 +22,38 @@ button,input,select{width:100%;padding:10px;margin:5px 0;box-sizing:border-box}
 <button id="clearBtn" class="btn-danger">Clear</button>
 <div id="status">Loading water dataset...</div>
 <div class="metric">Area: <span id="area">0.000</span> km²</div>
-<div class="metric">Nearest Water Threshold: <span id="threshold">NONE</span></div>
-<div class="metric">Intersecting Water Features: <span id="featureCount">0</span></div>
+<div class="metric">
+<b>OPEN WATER RISK:</b>
+<span id="risk">NONE</span>
+</div>
+
+<div class="metric">
+Total Open Water Features:
+<span id="totalFeatures">0</span>
+</div>
+
+<div class="metric">
+Within Site Boundary:
+<span id="withinSite">0</span>
+</div>
+
+<div class="metric">
+Additional Features Within 10m:
+<span id="within10">0</span>
+</div>
+
+<div class="metric">
+Additional Features Between 10m and 25m:
+<span id="within25">0</span>
+</div>
+
+<div class="metric">
+Additional Features Between 25m and 50m:
+<span id="within50">0</span>
+</div>
+
+<div id="summary"></div>
+    
 <div class="metric">Risk: <span id="risk">NONE</span></div>
 <button id="analyseBtn" class="btn-primary">Analyse Open Water</button>
 </div>
@@ -46,82 +76,117 @@ analyseBtn.onclick = () => {
         return;
     }
 
-    let detectedThreshold = null;
-    let detectedCount = 0;
+    function countFeatures(distance){
 
-    const thresholds = [0, 10, 25, 50];
-
-    for (const distance of thresholds) {
-
-        const testPolygon =
+        const polygon =
             distance === 0
                 ? siteGeo
                 : turf.buffer(
-                    siteGeo,
-                    distance,
-                    { units: "meters" }
-                );
+                      siteGeo,
+                      distance,
+                      {units:"meters"}
+                  );
 
-        const hits = waterData.features.filter(feature => {
+        return waterData.features.filter(feature => {
 
-            try {
+            try{
                 return turf.booleanIntersects(
-                    testPolygon,
+                    polygon,
                     feature
                 );
             }
-            catch(err) {
+            catch(err){
                 return false;
             }
 
-        });
-
-        if (hits.length > 0) {
-
-            detectedThreshold = distance;
-            detectedCount = hits.length;
-
-            break;
-
-        }
-            
-    }
-
-    featureCount.textContent = detectedCount;
-
-    if (detectedThreshold === null) {
-
-        threshold.textContent =
-            "None within 50m";
-
-        risk.textContent =
-            "NONE";
-
-        status.textContent =
-            "Analysis complete";
-
-        return;
+        }).length;
 
     }
 
-    threshold.textContent =
-        detectedThreshold + "m";
+    const siteCount = countFeatures(0);
+    const count10   = countFeatures(10);
+    const count25   = countFeatures(25);
+    const count50   = countFeatures(50);
 
-    if (detectedThreshold <= 10) {
+    const withinSite = siteCount;
+    const within10   = count10 - siteCount;
+    const within25   = count25 - count10;
+    const within50   = count50 - count25;
 
-        risk.textContent = "HIGH";
+    const totalFeatures = count50;
 
-    }
-    else if (detectedThreshold <= 25) {
+    let risk = "NONE";
 
-        risk.textContent = "MEDIUM";
+    if(siteCount > 0)
+        risk = "HIGH";
+    else if(within10 > 0)
+        risk = "HIGH";
+    else if(within25 > 0)
+        risk = "MEDIUM";
+    else if(within50 > 0)
+        risk = "LOW";
 
-    }
-    else {
+    document.getElementById(
+        "totalFeatures"
+    ).textContent = totalFeatures;
 
-        risk.textContent = "LOW";
+    document.getElementById(
+        "withinSite"
+    ).textContent = withinSite;
 
-    }
+    document.getElementById(
+        "within10"
+    ).textContent = within10;
+
+    document.getElementById(
+        "within25"
+    ).textContent = within25;
+
+    document.getElementById(
+        "within50"
+    ).textContent = within50;
+
+    document.getElementById(
+        "risk"
+    ).textContent = risk;
+
+    document.getElementById(
+        "summary"
+    ).innerHTML = `
+        <p>
+        There are a total of
+        <b>${totalFeatures}</b>
+        Open Water Features within or
+        in the vicinity of your site.
+        </p>
+
+        <p>
+        <b>${withinSite}</b>
+        open water features intersect
+        the site boundary.
+        </p>
+
+        <p>
+        <b>${within10}</b>
+        additional open water features
+        are present within 10m of the
+        site boundary.
+        </p>
+
+        <p>
+        <b>${within25}</b>
+        additional open water features
+        are present between 10m and
+        25m of the site boundary.
+        </p>
+
+        <p>
+        <b>${within50}</b>
+        additional open water features
+        are present between 25m and
+        50m of the site boundary.
+        </p>
+    `;
 
     status.textContent =
         "Analysis complete";
