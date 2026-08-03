@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LSBUD OpenWater 3.0A</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+body{margin:0;font-family:Arial,sans-serif}#map{position:fixed;inset:0}#panel{position:absolute;right:15px;top:15px;width:520px;background:#fff;z-index:1000;padding:18px;border-radius:12px;max-height:92vh;overflow:auto;box-shadow:0 2px 12px rgba(0,0,0,.25)}
+.lsb,.d{color:#08243a;font-size:34px;font-weight:700}.u{color:#d92d27;font-size:34px;font-weight:700}.ow{color:#666;font-size:34px}button{width:100%;padding:12px;margin:6px 0;border:none;cursor:pointer}.btn-primary{background:#08243a;color:#fff}.btn-secondary{background:#6b7280;color:#fff}.btn-danger{background:#b22938;color:#fff}.risk-high{color:#c00000;font-weight:700}.risk-medium{color:#d97706;font-weight:700}.risk-low{color:#15803d;font-weight:700}.report{display:none;margin-top:20px;border-top:2px solid #ddd;padding-top:15px}.placeholder{height:100px;background:#eee;border:1px dashed #999;padding:10px;margin:10px 0}
+</style>
+</head>
+<body>
+<div id="panel">
+<div><span class="lsb">LSB</span><span class="u">U</span><span class="d">D</span><span class="ow"> OpenWater</span></div>
+<p><b>OPEN WATER RISK & PLANNING HUB</b></p>
+<button id="drawBtn" class="btn-primary">Draw Polygon</button>
+<button id="finishBtn" class="btn-secondary">Finish Drawing</button>
+<button id="clearBtn" class="btn-danger">Clear</button>
+<div id="status">Loading dataset...</div>
+<div>Area: <span id="area">0.000</span> km²</div>
+<div id="summary">Please draw a site polygon and click <b>Analyse Open Water</b>.</div>
+<button id="analyseBtn" class="btn-primary">Analyse Open Water</button>
+<button id="reportBtn" class="btn-secondary" style="display:none">Generate Report Preview</button>
+<div id="reportPreview" class="report"></div>
+</div>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<script>
+const map=L.map('map').setView([52.48,-1.89],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(map);
+let waterData=null,siteGeo=null,sitePolygon=null,drawing=false,points=[],analysisResults=null,reportReference='';
+fetch('./SurfaceWater_bham_clip.geojson').then(r=>r.json()).then(d=>{waterData=d;status.textContent='Surface water dataset loaded';}).catch(()=>status.textContent='Failed to load SurfaceWater_bham_clip.geojson');
+
+drawBtn.onclick=()=>{drawing=true;points=[];if(sitePolygon){map.removeLayer(sitePolygon);}summary.innerHTML='Polygon drawing mode active.';};
+map.on('click',e=>{if(!drawing)return;points.push(e.latlng);if(sitePolygon)map.removeLayer(sitePolygon);sitePolygon=L.polygon(points,{color:'red'}).addTo(map);});
+finishBtn.onclick=()=>{if(points.length<3){alert('Please draw at least three points.');return;}drawing=false;const ring=points.map(p=>[p.lng,p.lat]);ring.push(ring[0]);siteGeo=turf.polygon([ring]);area.textContent=(turf.area(siteGeo)/1000000).toFixed(3);summary.innerHTML='<b>Assessment Pending</b><br>Click Analyse Open Water to perform the assessment.';};
+function countFeatures(d){const poly=d===0?siteGeo:turf.buffer(siteGeo,d,{units:'meters'});return waterData.features.filter(f=>{try{return turf.booleanIntersects(poly,f)}catch(e){return false}}).length;}
+analyseBtn.onclick=()=>{if(!siteGeo)return alert('Draw and finish a polygon first.');if(!waterData)return alert('Dataset not loaded.');const s=countFeatures(0),c10=countFeatures(10),c25=countFeatures(25),c50=countFeatures(50);const w10=c10-s,w25=c25-c10,w50=c50-c25;let risk='NONE',cls='';if(s>0||w10>0){risk='HIGH';cls='risk-high';}else if(w25>0){risk='MEDIUM';cls='risk-medium';}else if(w50>0){risk='LOW';cls='risk-low';}
+analysisResults={risk,total:c50,site:s,w10,w25,w50,area:area.textContent};const n=new Date();reportReference=`OW-${n.getFullYear()}${String(n.getMonth()+1).padStart(2,'0')}${String(n.getDate()).padStart(2,'0')}-${String(n.getHours()).padStart(2,'0')}${String(n.getMinutes()).padStart(2,'0')}${String(n.getSeconds()).padStart(2,'0')}`;
+summary.innerHTML=`<h3 class='${cls}'>OPEN WATER RISK: ${risk}</h3><p>There are a total of <b>${c50}</b> Open Water Features within or in the vicinity of your site.</p><p><b>${s}</b> open water features intersect the site boundary.</p><p><b>${w10}</b> additional open water features are present within 10m of the site boundary.</p><p><b>${w25}</b> additional open water features are present between 10m and 25m of the site boundary.</p><p><b>${w50}</b> additional open water features are present between 25m and 50m of the site boundary.</p>`;
+reportBtn.style.display='block';};
+reportBtn.onclick=()=>{if(!analysisResults)return;reportPreview.style.display='block';reportPreview.innerHTML=`<h2>Open Water Assessment Report Preview</h2><h3>Cover Sheet</h3><p><b>Reference:</b> ${reportReference}<br><b>Area:</b> ${analysisResults.area} km²<br><b>Risk:</b> ${analysisResults.risk}</p><h3>Executive Summary</h3><p>There are a total of <b>${analysisResults.total}</b> Open Water Features within or in the vicinity of the site.</p><p>${analysisResults.site} intersect the site boundary.</p><p>${analysisResults.w10} additional features within 10m.</p><p>${analysisResults.w25} additional features between 10m and 25m.</p><p>${analysisResults.w50} additional features between 25m and 50m.</p><h3>Assessment Map 1 - Site Overview</h3><div class='placeholder'>Map Placeholder</div><h3>Assessment Map 2 - Site Features</h3><div class='placeholder'>Map Placeholder</div><h3>Assessment Map 3 - 10m Assessment</h3><div class='placeholder'>Map Placeholder</div><h3>Assessment Map 4 - 25m Assessment</h3><div class='placeholder'>Map Placeholder</div><h3>Assessment Map 5 - 50m Assessment</h3><div class='placeholder'>Map Placeholder</div><h3>Disclaimer</h3><p>Source: OS Open Zoomstack Surface Water dataset. This assessment identifies mapped open water features within defined proximity bands. It does not assess flooding, groundwater, drainage capacity, sewer networks, temporary standing water, coastal inundation or unmapped water features.</p>`;};
+clearBtn.onclick=()=>{points=[];drawing=false;siteGeo=null;if(sitePolygon){map.removeLayer(sitePolygon);sitePolygon=null;}area.textContent='0.000';reportBtn.style.display='none';reportPreview.style.display='none';summary.innerHTML='Please draw a site polygon and click <b>Analyse Open Water</b>.';};
+</script>
+</body></html>
