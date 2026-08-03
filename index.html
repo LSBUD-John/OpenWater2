@@ -27,34 +27,8 @@ button,input,select{width:100%;padding:10px;margin:5px 0;box-sizing:border-box}
 <span id="risk">NONE</span>
 </div>
 
-<div class="metric">
-Total Open Water Features:
-<span id="totalFeatures">0</span>
-</div>
-
-<div class="metric">
-Within Site Boundary:
-<span id="withinSite">0</span>
-</div>
-
-<div class="metric">
-Additional Features Within 10m:
-<span id="within10">0</span>
-</div>
-
-<div class="metric">
-Additional Features Between 10m and 25m:
-<span id="within25">0</span>
-</div>
-
-<div class="metric">
-Additional Features Between 25m and 50m:
-<span id="within50">0</span>
-</div>
-
 <div id="summary"></div>
     
-<div class="metric">Risk: <span id="risk">NONE</span></div>
 <button id="analyseBtn" class="btn-primary">Analyse Open Water</button>
 </div>
 <div id="map"></div>
@@ -204,8 +178,6 @@ clearBtn.onclick = () => {
     }
 
     area.textContent = "0.000";
-
-    threshold.textContent = "NONE";
 
     featureCount.textContent = "0";
 
